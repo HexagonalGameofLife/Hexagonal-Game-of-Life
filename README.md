@@ -1,6 +1,6 @@
-#Hexagonal Game of Life
+# Hexagonal Game of Life
 
-Overview
+## Overview
 
 The Hexagonal Game of Life is an adaptation of Conway’s Game of Life that uses a hexagonal grid instead of the traditional square grid. This project showcases a simulation implemented in Python, using libraries such as pygame for visualization and numpy for grid management. The unique properties of hexagonal grids allow for a more balanced and natural representation of cellular automata, as explored in the accompanying research paper.
 
