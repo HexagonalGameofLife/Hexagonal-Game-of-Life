@@ -1,4 +1,4 @@
-##Hexagonal Game of Life
+#Hexagonal Game of Life
 
 Overview
 
