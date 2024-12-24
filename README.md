@@ -7,7 +7,7 @@ The Hexagonal Game of Life is an adaptation of Conway’s Game of Life that uses
 ### Repository Structure
 
 - **main.py**: The Python script containing the implementation of the Hexagonal Game of Life. This includes the grid initialization, hexagonal calculations, neighbor detection, and simulation rules.
-- **DM1_09_HexGoL_Zayimhan.pdf**: A comprehensive research paper detailing the theory, methodology, experiments, and findings related to the Hexagonal Game of Life.
+- **Hexagonal Game of Life.pdf**: A comprehensive research paper detailing the theory, methodology, experiments, and findings related to the Hexagonal Game of Life.
 
 ### Features
 
