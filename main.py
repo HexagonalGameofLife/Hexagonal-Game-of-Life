@@ -10,6 +10,11 @@ BUTTON_COLOR = (100, 100, 255)
 BUTTON_TEXT_COLOR = (255, 255, 255)
 PAUSE_COLOR = (255, 0, 0)
 
+history = []  # Önceki grid durumlarını tutar
+
+mouse_pressed = False  # Fare herhangi bir tuşa basılı mı?
+mouse_button = None  # Basılı olan fare tuşu ("left" veya "right")
+
 # Pygame başlatılıyor
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -20,6 +25,14 @@ start_button_rect = pygame.Rect(WIDTH - 300, HEIGHT - 50, 140, 40)  # Başlat/Du
 next_button_rect = pygame.Rect(WIDTH - 150, HEIGHT - 50, 140, 40)   # Next Step butonu
 clear_button_rect = pygame.Rect(WIDTH - 450, HEIGHT - 50, 140, 40)  # Clear butonu
 random_button_rect = pygame.Rect(WIDTH - 600, HEIGHT - 50, 140, 40)  # Random Pattern butonu
+
+# Slider tanımlamaları
+slider_rect = pygame.Rect(50, 50, 300, 10)  # Slider çubuğu
+slider_handle_rect = pygame.Rect(50, 40, 20, 30)  # Sürüklenebilir düğme
+slider_color = (100, 100, 100)
+slider_handle_color = (255, 255, 255)
+simulation_speed = 5  # Varsayılan hız (fps)
+dragging = False  # Slider sürükleme kontrolü
 
 # Altıgenin bir köşesinin koordinatlarını hesaplama
 def hex_corner(center, i):
@@ -87,6 +100,20 @@ def draw_buttons(running_simulation):
     random_text = font.render("Random", True, BUTTON_TEXT_COLOR)
     screen.blit(random_text, (random_button_rect.x + 30, random_button_rect.y + 10))
 
+def draw_slider():
+    pygame.draw.rect(screen, slider_color, slider_rect)
+    pygame.draw.rect(screen, slider_handle_color, slider_handle_rect)
+    font = pygame.font.Font(None, 30)
+    text = font.render(f"Speed: {simulation_speed}", True, (255, 255, 255))
+    screen.blit(text, (slider_rect.x + slider_rect.width + 20, slider_rect.y - 10))
+
+def handle_slider(mx, dragging):
+    global simulation_speed
+    if dragging and slider_rect.x <= mx <= slider_rect.x + slider_rect.width:
+        slider_handle_rect.x = mx - slider_handle_rect.width // 2
+        relative_position = (slider_handle_rect.x - slider_rect.x) / slider_rect.width
+        simulation_speed = max(1, int(relative_position * 20)) 
+
 def select_hex(mx, my):
     for x, y, row, col in hex_centers:
         dx = mx - x
@@ -130,6 +157,51 @@ def update_grid():
                     new_grid[row][col] = 1
     return new_grid
 
+def draw_statistics():
+    font = pygame.font.Font(None, 35)
+    text = font.render(f"Alive # : {count_alive_cells()}", True, (255, 255, 255))
+    screen.blit(text, (40, HEIGHT - 50))
+
+def analyze_pattern():
+    """
+    Grid'in evrimini analiz eder.
+    - Eğer sabit bir durumdaysa: 'Stable'
+    - Eğer döngüye girdiyse: 'Oscillating'
+    - Eğer kaotik bir durumdaysa: 'Chaotic'
+    """
+    global history
+
+    # Şimdiki grid'i geçmişe ekle
+    current_grid = np.copy(grid)
+    history.append(current_grid)
+
+    # Tarih kontrolü için maksimum uzunluk sınırı koy (örneğin 100 adım)
+    if len(history) > 100:
+        history.pop(0)
+
+    # Sabit durum kontrolü
+    if len(history) >= 2 and np.array_equal(history[-1], history[-2]):
+        return "Stable"
+
+    # Döngü kontrolü (önceki durumların tekrarı)
+    for i in range(len(history) - 1):
+        if np.array_equal(history[i], current_grid):
+            return "Oscillating"
+
+    # Eğer durum sabit veya döngü değilse, kaotik olarak kabul edilir
+    return "Chaotic"    
+
+def draw_analysis_result():
+    """
+    Grid'in analiz sonucunu ekrana yazar.
+    """
+    font = pygame.font.Font(None, 35)
+    result = analyze_pattern()
+    result_text = font.render(f"Analysis: {result}", True, (255, 255, 255))
+    screen.blit(result_text, (WIDTH - 280, 40))
+
+
+
 # Ana döngü
 running_simulation = False
 show_next_step = False
@@ -140,6 +212,10 @@ while running:
     screen.fill(BACKGROUND_COLOR)
     draw_grid()
     draw_buttons(running_simulation)
+    draw_slider()
+    draw_statistics()
+    draw_analysis_result()
+    
     pygame.display.flip()
 
     for event in pygame.event.get():
@@ -147,10 +223,12 @@ while running:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = pygame.mouse.get_pos()
-            if start_button_rect.collidepoint(mx, my):
+            if slider_handle_rect.collidepoint(mx, my):
+                dragging = True
+            elif start_button_rect.collidepoint(mx, my):
                 running_simulation = not running_simulation
                 if running_simulation:
-                    print(f"Beginning of simulation  - living grid count: {count_alive_cells()}")
+                    print(f"Beginning of simulation - living grid count: {count_alive_cells()}")
             elif next_button_rect.collidepoint(mx, my):
                 show_next_step = True
             elif clear_button_rect.collidepoint(mx, my):
@@ -159,11 +237,16 @@ while running:
                 random_pattern()
             elif not running_simulation:
                 select_hex(mx, my)
+        elif event.type == pygame.MOUSEBUTTONUP:
+            dragging = False
+        elif event.type == pygame.MOUSEMOTION and dragging:
+            mx, my = pygame.mouse.get_pos()
+            handle_slider(mx, dragging)
 
     if running_simulation or show_next_step:
         grid = update_grid()
         show_next_step = False
 
-    clock.tick(5)
+    clock.tick(simulation_speed)
 
-pygame.quit()
+pygame.quit() 
