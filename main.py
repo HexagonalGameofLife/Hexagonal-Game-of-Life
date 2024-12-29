@@ -4,7 +4,7 @@ import math
 
 # Ekran boyutları ve altıgen parametreleri
 WIDTH, HEIGHT = 1000, 800
-HEX_SIZE = 20  # Altıgenin kenar uzunluğu
+HEX_SIZE = 1  # Altıgenin kenar uzunluğu küçültüldü
 BACKGROUND_COLOR = (0, 0, 0)  # Siyah arka plan
 BUTTON_COLOR = (100, 100, 255)
 BUTTON_TEXT_COLOR = (255, 255, 255)
@@ -21,47 +21,14 @@ next_button_rect = pygame.Rect(WIDTH - 150, HEIGHT - 50, 140, 40)   # Next Step 
 clear_button_rect = pygame.Rect(WIDTH - 450, HEIGHT - 50, 140, 40)  # Clear butonu
 random_button_rect = pygame.Rect(WIDTH - 600, HEIGHT - 50, 140, 40)  # Random Pattern butonu
 
-# Altıgenin bir köşesinin koordinatlarını hesaplama
-def hex_corner(center, i):
-    angle_deg = 60 * i + 60  # Her köşe için 60 derece döndürme
-    angle_rad = math.pi / 180 * angle_deg
-    return (center[0] + HEX_SIZE * math.cos(angle_rad),
-            center[1] + HEX_SIZE * math.sin(angle_rad))
-
-# Altıgeni ekrana çizme
-def draw_hexagon(x, y, is_alive):
-    center = (x, y)
-    points = [hex_corner(center, i) for i in range(6)]  # Altı köşe noktası hesaplanır
-    color = (255, 255, 0) if is_alive else BACKGROUND_COLOR  # Sarı: canlı, siyah: ölü
-    pygame.draw.polygon(screen, color, points)  # Hücreyi doldur
-    pygame.draw.polygon(screen, (0, 0, 255), points, width=1)  # Kenarlıklar
-
 # Hücrelerin durumu (satır ve sütun boyutları)
-cols = int(WIDTH / (HEX_SIZE * 1.5))  # Sütunlar arası mesafe
-rows = int(HEIGHT / (HEX_SIZE * math.sqrt(3)))  # Satırlar arası mesafe
+cols = 1000  # 1000 sütun
+rows = 1000  # 1000 satır
 grid = np.zeros((rows, cols), dtype=int)  # Hücrelerin başlangıç durumu (tümü ölü)
 
-# Hücre merkezlerini saklayan liste
-hex_centers = []
-
-def count_alive_cells():
-    """
-    Izgaradaki toplam canlı hücre sayısını döndürür.
-    """
-    return np.sum(grid)
-
-def draw_grid():
-    global hex_centers
-    hex_centers = []  # Hücre merkezlerini saklamak için temizle
-    for row in range(rows):
-        for col in range(cols):
-            x = col * HEX_SIZE * 3 / 2  # Sütunlar için yatay mesafe
-            y = row * HEX_SIZE * math.sqrt(3)  # Satırlar için dikey mesafe
-            if col % 2 == 1:  # Tek sütunlar bir satır kaydırılır
-                y += HEX_SIZE * math.sqrt(3) / 2
-            is_alive = grid[row][col] == 1
-            draw_hexagon(x, y, is_alive)  # Hücreyi hesaplanan koordinatlarla çiz
-            hex_centers.append((x, y, row, col))  # Merkez koordinatlarını sakla
+# Optimize edilen yüzey
+hex_surface = pygame.Surface((WIDTH, HEIGHT))
+hex_surface.fill(BACKGROUND_COLOR)
 
 def draw_buttons(running_simulation):
     # Başlat/Durdur butonu
@@ -87,59 +54,63 @@ def draw_buttons(running_simulation):
     random_text = font.render("Random", True, BUTTON_TEXT_COLOR)
     screen.blit(random_text, (random_button_rect.x + 30, random_button_rect.y + 10))
 
-def select_hex(mx, my):
-    for x, y, row, col in hex_centers:
-        dx = mx - x
-        dy = my - y
-        distance = math.sqrt(dx ** 2 + dy ** 2)
-        if distance <= HEX_SIZE:
-            grid[row][col] = 1 - grid[row][col]
-            break
+def draw_step_counter(step_count):
+    """
+    Displays the step count on the screen.
+    """
+    font = pygame.font.Font(None, 36)
+    step_text = f"Steps: {step_count}"
+    text = font.render(step_text, True, BUTTON_TEXT_COLOR)
+    screen.blit(text, (10, HEIGHT - 40))
 
 def random_pattern():
     global grid
     grid = np.random.choice([0, 1], size=(rows, cols), p=[0.8, 0.2])
-    print(f"Başlangıçtaki canlı hücre sayısı: {count_alive_cells()}")
 
 def clear_grid():
     global grid
     grid = np.zeros((rows, cols), dtype=int)
 
-def get_neighbors(r, c):
-    offsets = [(-1, 0), (0, -1), (0, +1), (+1, 0)]
-    if c % 2 == 0:  # Çift sütun
-        offsets += [(-1, +1), (-1, -1)]
-    else:  # Tek sütun
-        offsets += [(+1, +1), (+1, -1)]
-    neighbors = [(r + dr, c + dc) for dr, dc in offsets
-                 if 0 <= r + dr < rows and 0 <= c + dc < cols]
-    return neighbors
-
 def update_grid():
-    new_grid = np.copy(grid)
-    for row in range(rows):
-        for col in range(cols):
-            live_neighbors = sum(grid[nr][nc] for nr, nc in get_neighbors(row, col))
-            if grid[row][col] == 1:
-                if live_neighbors in [3, 4]:
-                    new_grid[row][col] = 1
-                else:
-                    new_grid[row][col] = 0
-            elif grid[row][col] == 0:
-                if live_neighbors == 2:
-                    new_grid[row][col] = 1
-    return new_grid
+    """
+    Update the grid using numpy operations for faster processing.
+    """
+    global grid
+    neighbor_count = sum(
+        np.roll(np.roll(grid, dy, axis=0), dx, axis=1)
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1)]
+    )
+    grid = ((grid == 1) & ((neighbor_count == 3) | (neighbor_count == 4))) | (
+        (grid == 0) & (neighbor_count == 2)
+    )
+    grid = grid.astype(int)
+
+def draw_grid():
+    """
+    Draw only the active cells for better performance.
+    """
+    hex_surface.fill(BACKGROUND_COLOR)
+    live_cells = np.argwhere(grid == 1)
+    for (row, col) in live_cells:
+        x = col * HEX_SIZE * 3 / 2
+        y = row * HEX_SIZE * math.sqrt(3)
+        if col % 2 == 1:  # Offset for odd columns
+            y += HEX_SIZE * math.sqrt(3) / 2
+        pygame.draw.circle(hex_surface, (255, 255, 0), (int(x), int(y)), HEX_SIZE)
 
 # Ana döngü
 running_simulation = False
-show_next_step = False
 running = True
 clock = pygame.time.Clock()
+step_count = 0  # Initialize step counter
+state_history = set()  # Set to track previous states
 
 while running:
     screen.fill(BACKGROUND_COLOR)
     draw_grid()
+    screen.blit(hex_surface, (0, 0))
     draw_buttons(running_simulation)
+    draw_step_counter(step_count)
     pygame.display.flip()
 
     for event in pygame.event.get():
@@ -147,23 +118,24 @@ while running:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = pygame.mouse.get_pos()
-            if start_button_rect.collidepoint(mx, my):
-                running_simulation = not running_simulation
-                if running_simulation:
-                    print(f"Beginning of simulation  - living grid count: {count_alive_cells()}")
-            elif next_button_rect.collidepoint(mx, my):
-                show_next_step = True
-            elif clear_button_rect.collidepoint(mx, my):
-                clear_grid()
-            elif random_button_rect.collidepoint(mx, my):
+            if random_button_rect.collidepoint(mx, my):
                 random_pattern()
-            elif not running_simulation:
-                select_hex(mx, my)
+                state_history.clear()
+                step_count = 0
+                running_simulation = True
 
-    if running_simulation or show_next_step:
-        grid = update_grid()
-        show_next_step = False
+    if running_simulation:
+        grid_hash = hash(grid.tobytes())
+        if grid_hash in state_history:
+            print(f"Infinite loop detected at step {step_count}. Restarting...")
+            random_pattern()
+            state_history.clear()
+            step_count = 0
+        else:
+            state_history.add(grid_hash)
+            update_grid()
+            step_count += 1
 
-    clock.tick(5)
+    clock.tick(30)  # Increased frame rate to 30 FPS
 
 pygame.quit()
